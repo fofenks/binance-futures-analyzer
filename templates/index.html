@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Binance Futures Asenkron Analiz</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 2em;
+        }
+        #result ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        #result li {
+            margin-bottom: 0.5em;
+        }
+    </style>
+</head>
+<body>
+    <h1>Binance Futures Asenkron Analiz Uygulaması</h1>
+    <label for="selectedDate">Tarih Seçin:</label>
+    <input type="date" id="selectedDate" value="2025-02-23">
+
+    <label for="changeThreshold">Değişim Yüzdesi Seçin:</label>
+    <select id="changeThreshold">
+        <option value="10">10%</option>
+        <option value="15" selected>15%</option>
+        <option value="20">20%</option>
+        <option value="25">25%</option>
+    </select>
+
+    <button id="analyzeButton">Analizleri Görüntüle</button>
+    <div id="result"></div>
+
+    <script>
+        document.getElementById('analyzeButton').addEventListener('click', function() {
+            const selectedDate = document.getElementById('selectedDate').value;
+            const changeThreshold = document.getElementById('changeThreshold').value;
+            const resultDiv = document.getElementById('result');
+
+            // Butona tıklandığında "Yükleniyor..." mesajını gösteriyoruz.
+            resultDiv.innerHTML = '<p>Yükleniyor...</p>';
+            
+            fetch(`/analyze?date=${selectedDate}&threshold=${changeThreshold}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Ağ hatası: ' + response.status);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log("Alınan veri:", data);
+                    
+                    let html = `<h2>${data.date} Tarihinde Analiz Sonuçları</h2>`;
+                    html += `<p>Artış: ${data.increases_count} | Düşüş: ${data.decreases_count}</p>`;
+                    
+                    if (data.increases && data.increases.length > 0) {
+                        html += `<h3>%${data.threshold} ve üzeri artışlar:</h3><ul>`;
+                        data.increases.forEach(item => {
+                            html += `<li>${item[0]}: ${parseFloat(item[1]).toFixed(2)}%</li>`;
+                        });
+                        html += '</ul>';
+                    } else {
+                        html += `<p>%${data.threshold} ve üzeri artış yok.</p>`;
+                    }
+                    
+                    if (data.decreases && data.decreases.length > 0) {
+                        html += `<h3>%${data.threshold} ve üzeri düşüşler:</h3><ul>`;
+                        data.decreases.forEach(item => {
+                            html += `<li>${item[0]}: ${parseFloat(item[1]).toFixed(2)}%</li>`;
+                        });
+                        html += '</ul>';
+                    } else {
+                        html += `<p>%${data.threshold} ve üzeri düşüş yok.</p>`;
+                    }
+                    
+                    resultDiv.innerHTML = html;
+                })
+                .catch(error => {
+                    console.error('Hata:', error);
+                    resultDiv.innerText = 'Veri alınırken bir hata oluştu.';
+                });
+        });
+    </script>
+</body>
+</html>
