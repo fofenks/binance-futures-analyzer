@@ -1,5 +1,3 @@
-sys
-asyncio
-datetime
 Flask
+ccxt
 gunicorn
