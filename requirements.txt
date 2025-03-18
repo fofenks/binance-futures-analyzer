@@ -3,3 +3,4 @@ DateTime
 Flask
 gunicorn
 flask[async]
+ccxt
