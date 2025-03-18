@@ -16,7 +16,7 @@ def index():
 
 @app.route('/analyze')
 async def analyze():
-    date_str = request.args.get('date', '2025-02-23')
+    date_str = request.args.get('date', '2025-03-01')
     threshold = request.args.get('threshold', '15')  # Varsayılan %15
     try:
         selected_date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
