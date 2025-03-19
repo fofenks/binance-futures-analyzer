@@ -1,87 +1,229 @@
 <!DOCTYPE html>
-<html>
+<html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <title>Binance Futures Asenkron Analiz</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 2em;
-        }
-        #result ul {
-            list-style-type: none;
-            padding: 0;
-        }
-        #result li {
-            margin-bottom: 0.5em;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Binance Futures Günlük Analiz Tablosu</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 1em;
+      position: relative;
+      padding: 0.5em;
+    }
+    table {
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      width: 100%;
+      table-layout: auto;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px;
+      text-align: center;
+      vertical-align: top;
+      white-space: nowrap;
+      font-size: 0.9em;
+    }
+    th {
+      background-color: #f0f0f0;
+    }
+    #loadingTime {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background-color: #f0f0f0;
+      padding: 5px 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 0.8em;
+    }
+    #downloadBtn {
+      margin-left: 20px;
+      padding: 8px 12px;
+      font-size: 0.9em;
+      cursor: pointer;
+    }
+    /* Responsive: Tabloyu gerektiğinde yatay kaydırma */
+    #result {
+      overflow-x: auto;
+    }
+    /* Mobil cihazlar için yazı boyutunu biraz küçültelim */
+    @media (max-width: 600px) {
+      body {
+        margin: 0.5em;
+      }
+      th, td {
+        padding: 4px;
+        font-size: 0.8em;
+      }
+      #downloadBtn {
+        padding: 6px 10px;
+        font-size: 0.8em;
+      }
+    }
+  </style>
+  <!-- SheetJS kütüphanesi -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
-    <h1>Binance Futures Asenkron Analiz Uygulaması</h1>
-    <label for="selectedDate">Tarih Seçin:</label>
-    <input type="date" id="selectedDate" value="2025-02-23">
-
-    <label for="changeThreshold">Değişim Yüzdesi Seçin:</label>
-    <select id="changeThreshold">
-        <option value="10">10%</option>
-        <option value="15" selected>15%</option>
-        <option value="20">20%</option>
-        <option value="25">25%</option>
-    </select>
-
-    <button id="analyzeButton">Analizleri Görüntüle</button>
-    <div id="result"></div>
-
-    <script>
-        document.getElementById('analyzeButton').addEventListener('click', function() {
-            const selectedDate = document.getElementById('selectedDate').value;
-            const changeThreshold = document.getElementById('changeThreshold').value;
-            const resultDiv = document.getElementById('result');
-
-            // Butona tıklandığında "Yükleniyor..." mesajını gösteriyoruz.
-            resultDiv.innerHTML = '<p>Yükleniyor...</p>';
+  <div id="loadingTime"></div>
+  <h1>Binance Futures Günlük Analiz Tablosu
+    <button id="downloadBtn">Excel Olarak İndir</button>
+  </h1>
+  
+  <label for="startDate">Başlangıç Tarihi:</label>
+  <input type="date" id="startDate" value="2025-03-27">
+  
+  <label for="endDate">Bitiş Tarihi:</label>
+  <input type="date" id="endDate" value="2025-03-27">
+  
+  <label for="threshold">Değişim Yüzdesi Seçin:</label>
+  <select id="threshold">
+    <option value="10">10%</option>
+    <option value="15" selected>15%</option>
+    <option value="20">20%</option>
+    <option value="25">25%</option>
+  </select>
+  
+  <label for="modeSelect">Hesaplama Modu:</label>
+  <select id="modeSelect">
+    <option value="open/close" selected>Open/Close</option>
+    <option value="low/high">Low/High</option>
+  </select>
+  
+  <button id="analyzeRangeButton">Analizleri Görüntüle</button>
+  
+  <div id="result"></div>
+  
+  <script>
+    document.getElementById('analyzeRangeButton').addEventListener('click', function() {
+      const startDate = document.getElementById('startDate').value;
+      const endDate = document.getElementById('endDate').value;
+      const threshold = document.getElementById('threshold').value;
+      const mode = document.getElementById('modeSelect').value;
+      const resultDiv = document.getElementById('result');
+      const loadingDiv = document.getElementById('loadingTime');
+      
+      const startTime = Date.now();
+      resultDiv.innerHTML = '<p>Yükleniyor...</p>';
+      loadingDiv.innerText = '';
+      
+      const url = `/analyze_range?start_date=${startDate}&end_date=${endDate}&threshold=${threshold}&mode=${mode}`;
+      
+      fetch(url)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Ağ hatası: ' + response.status);
+          }
+          return response.json();
+        })
+        .then(data => {
+          const endTime = Date.now();
+          const duration = ((endTime - startTime) / 1000).toFixed(2);
+          loadingDiv.innerText = `Yükleme süresi: ${duration} sn`;
+          
+          const dailyResults = data.daily_results || [];
+          if (dailyResults.length === 0) {
+            resultDiv.innerHTML = '<p>Bu tarih aralığında veri bulunamadı.</p>';
+            return;
+          }
+          
+          const table = document.createElement('table');
+          
+          // Üst satır: Her günün tarihi
+          const trHeader1 = document.createElement('tr');
+          dailyResults.forEach(dayResult => {
+            const th = document.createElement('th');
+            th.colSpan = 4;
+            th.innerText = dayResult.date;
+            trHeader1.appendChild(th);
+          });
+          table.appendChild(trHeader1);
+          
+          // İkinci satır: Alt başlıklar
+          const trHeader2 = document.createElement('tr');
+          dailyResults.forEach(() => {
+            const thDownSymbol = document.createElement('th');
+            thDownSymbol.innerText = 'Düşen Parite';
+            const thDownChange = document.createElement('th');
+            thDownChange.innerText = 'Düşüş (%)';
+            const thUpSymbol = document.createElement('th');
+            thUpSymbol.innerText = 'Yükselen Parite';
+            const thUpChange = document.createElement('th');
+            thUpChange.innerText = 'Yükseliş (%)';
             
-            fetch(`/analyze?date=${selectedDate}&threshold=${changeThreshold}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Ağ hatası: ' + response.status);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    console.log("Alınan veri:", data);
-                    
-                    let html = `<h2>${data.date} Tarihinde Analiz Sonuçları</h2>`;
-                    html += `<p>Artış: ${data.increases_count} | Düşüş: ${data.decreases_count}</p>`;
-                    
-                    if (data.increases && data.increases.length > 0) {
-                        html += `<h3>%${data.threshold} ve üzeri artışlar:</h3><ul>`;
-                        data.increases.forEach(item => {
-                            html += `<li>${item[0]}: ${parseFloat(item[1]).toFixed(2)}%</li>`;
-                        });
-                        html += '</ul>';
-                    } else {
-                        html += `<p>%${data.threshold} ve üzeri artış yok.</p>`;
-                    }
-                    
-                    if (data.decreases && data.decreases.length > 0) {
-                        html += `<h3>%${data.threshold} ve üzeri düşüşler:</h3><ul>`;
-                        data.decreases.forEach(item => {
-                            html += `<li>${item[0]}: ${parseFloat(item[1]).toFixed(2)}%</li>`;
-                        });
-                        html += '</ul>';
-                    } else {
-                        html += `<p>%${data.threshold} ve üzeri düşüş yok.</p>`;
-                    }
-                    
-                    resultDiv.innerHTML = html;
-                })
-                .catch(error => {
-                    console.error('Hata:', error);
-                    resultDiv.innerText = 'Veri alınırken bir hata oluştu.';
-                });
+            trHeader2.appendChild(thDownSymbol);
+            trHeader2.appendChild(thDownChange);
+            trHeader2.appendChild(thUpSymbol);
+            trHeader2.appendChild(thUpChange);
+          });
+          table.appendChild(trHeader2);
+          
+          // Maksimum satır sayısını dinamik olarak belirleyelim
+          let maxRows = 0;
+          dailyResults.forEach(dayResult => {
+            const dayMax = Math.max(dayResult.decreases.length, dayResult.increases.length);
+            if (dayMax > maxRows) {
+              maxRows = dayMax;
+            }
+          });
+          
+          // Veri satırlarını dolduralım
+          for (let row = 0; row < maxRows; row++) {
+            const trData = document.createElement('tr');
+            dailyResults.forEach(dayResult => {
+              // Düşen parite ve değeri
+              const tdDownSymbol = document.createElement('td');
+              const tdDownChange = document.createElement('td');
+              if (row < dayResult.decreases.length) {
+                const item = dayResult.decreases[row];
+                tdDownSymbol.innerText = item[0];
+                tdDownChange.innerText = parseFloat(item[1]).toFixed(2) + '%';
+              } else {
+                tdDownSymbol.innerText = '';
+                tdDownChange.innerText = '';
+              }
+              
+              // Yükselen parite ve değeri
+              const tdUpSymbol = document.createElement('td');
+              const tdUpChange = document.createElement('td');
+              if (row < dayResult.increases.length) {
+                const item = dayResult.increases[row];
+                tdUpSymbol.innerText = item[0];
+                tdUpChange.innerText = parseFloat(item[1]).toFixed(2) + '%';
+              } else {
+                tdUpSymbol.innerText = '';
+                tdUpChange.innerText = '';
+              }
+              
+              trData.appendChild(tdDownSymbol);
+              trData.appendChild(tdDownChange);
+              trData.appendChild(tdUpSymbol);
+              trData.appendChild(tdUpChange);
+            });
+            table.appendChild(trData);
+          }
+          
+          resultDiv.innerHTML = '';
+          resultDiv.appendChild(table);
+        })
+        .catch(error => {
+          console.error("API çağrısı başarısız:", error);
+          resultDiv.innerText = "Veri alınırken bir hata oluştu.";
         });
-    </script>
+    });
+    
+    // Excel olarak indirme: SheetJS kullanarak XLSX dosyası oluşturma
+    document.getElementById('downloadBtn').addEventListener('click', function() {
+      const table = document.querySelector('#result table');
+      if (!table) {
+        alert("Önce analiz sonuçlarını görüntüleyin.");
+        return;
+      }
+      const wb = XLSX.utils.table_to_book(table, { sheet: "Analiz Sonuçları" });
+      XLSX.writeFile(wb, "analiz_sonuclari.xlsx");
+    });
+  </script>
 </body>
 </html>
