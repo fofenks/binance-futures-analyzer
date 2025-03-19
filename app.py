@@ -53,7 +53,7 @@ async def analyze():
                     return None
                 if mode == 'low/high':
                     if close_price > open_price:
-                        daily_change = ((low_price - high_price) / low_price) * 100
+                        daily_change = -((low_price - high_price) / low_price) * 100
                     elif close_price < open_price:
                         daily_change = -((high_price - low_price) / high_price) * 100
                     else:
