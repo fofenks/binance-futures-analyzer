@@ -1,6 +1,7 @@
 import sys
 import asyncio
 import datetime
+import gc
 from flask import Flask, render_template, jsonify, request
 
 if sys.platform == "win32":
@@ -14,12 +15,12 @@ app = Flask(__name__)
 def index():
     return render_template('index.html')
 
-# Tek günlük analiz endpoint'i
+# Tek günlük analiz endpoint'i (opsiyonel mod eklenmiş: mode)
 @app.route('/analyze')
 async def analyze():
     date_str = request.args.get('date', '2025-03-27')
     threshold = request.args.get('threshold', '15')
-    mode = request.args.get('mode', 'open/close')  # Varsayılan "open/close"
+    mode = request.args.get('mode', 'open/close')  # "open/close" veya "low/high"
     try:
         selected_date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
         threshold = float(threshold)
@@ -42,7 +43,10 @@ async def analyze():
 
     async def fetch_symbol_data(symbol, day_ts):
         try:
-            ohlcv = await exchange.fetch_ohlcv(symbol, timeframe='1d', since=day_ts, limit=1)
+            ohlcv = await asyncio.wait_for(
+                exchange.fetch_ohlcv(symbol, timeframe='1d', since=day_ts, limit=1),
+                timeout=10
+            )
             if ohlcv and len(ohlcv) > 0:
                 ts, open_price, high_price, low_price, close_price, volume = ohlcv[0]
                 if ts - day_ts > 86400000:
@@ -85,7 +89,7 @@ async def analyze():
     return jsonify(result)
 
 
-# Yeni endpoint: Belirtilen tarih aralığında her gün için analiz yapar
+# Yeni endpoint: Belirtilen tarih aralığında her gün için analiz yapar (opsiyonel mod)
 @app.route('/analyze_range')
 async def analyze_range():
     start_date_str = request.args.get('start_date', '2025-03-27')
@@ -111,12 +115,16 @@ async def analyze_range():
            market.get('swap', False) and market.get('linear', False)
     ]
 
-    semaphore = asyncio.Semaphore(10)
+    # Concurrency limit: Aynı anda en fazla 5 istek yapalım
+    const_semaphore = asyncio.Semaphore(5)
 
     async def fetch_symbol_data_for_day(symbol, day_ts):
-        async with semaphore:
+        async with const_semaphore:
             try:
-                ohlcv = await exchange.fetch_ohlcv(symbol, timeframe='1d', since=day_ts, limit=1)
+                ohlcv = await asyncio.wait_for(
+                    exchange.fetch_ohlcv(symbol, timeframe='1d', since=day_ts, limit=1),
+                    timeout=10
+                )
                 if ohlcv and len(ohlcv) > 0:
                     ts, open_price, high_price, low_price, close_price, volume = ohlcv[0]
                     if ts - day_ts > 86400000:
@@ -158,6 +166,11 @@ async def analyze_range():
             "increases_count": len(increases_sorted),
             "decreases_count": len(decreases_sorted)
         })
+
+        # Bellek temizliği: Her günün verilerinden sonra ilgili değişkenleri sil ve gc.collect() çağır.
+        del tasks, results, symbol_changes
+        gc.collect()
+
         current_date += datetime.timedelta(days=1)
 
     await exchange.close()
